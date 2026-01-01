@@ -6,24 +6,40 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { products, categories } from '@/data/products';
 
 const Index = () => {
+  const navigate = useNavigate();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [isFriday, setIsFriday] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Все');
+  const [isRegister, setIsRegister] = useState(false);
 
   useEffect(() => {
     const today = new Date().getDay();
     setIsFriday(today === 5);
     
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark';
+    const savedAuth = localStorage.getItem('isAuthenticated');
+    const savedCart = localStorage.getItem('cart');
+    
     if (savedTheme) {
       setTheme(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+    }
+    
+    if (savedAuth === 'true') {
+      setIsAuthenticated(true);
+    }
+    
+    if (savedCart) {
+      setCartItems(JSON.parse(savedCart));
     }
   }, []);
 
@@ -33,19 +49,6 @@ const Index = () => {
     localStorage.setItem('theme', newTheme);
     document.documentElement.classList.toggle('dark');
   };
-
-  const products = [
-    { id: 1, name: 'Диван "Комфорт"', price: 45000, category: 'Мебель', image: '🛋️' },
-    { id: 2, name: 'Обеденный стол', price: 28000, category: 'Мебель', image: '🪑' },
-    { id: 3, name: 'Набор шоколада', price: 1200, category: 'Сладости', image: '🍫' },
-    { id: 4, name: 'Торт "Прага"', price: 890, category: 'Сладости', image: '🎂' },
-    { id: 5, name: 'Корм для собак', price: 2500, category: 'Зоо-товары', image: '🐕' },
-    { id: 6, name: 'Когтеточка', price: 1800, category: 'Зоо-товары', image: '🐱' },
-    { id: 7, name: 'Фруктовый набор', price: 2200, category: 'Еда', image: '🍎' },
-    { id: 8, name: 'Сыр "Пармезан"', price: 890, category: 'Еда', image: '🧀' },
-  ];
-
-  const categories = ['Все', 'Мебель', 'Сладости', 'Зоо-товары', 'Еда'];
 
   const filteredProducts = selectedCategory === 'Все' 
     ? products 
@@ -65,32 +68,57 @@ const Index = () => {
     }
     
     const existingItem = cartItems.find(item => item.id === product.id);
+    let updatedCart;
+    
     if (existingItem) {
-      setCartItems(cartItems.map(item => 
+      updatedCart = cartItems.map(item => 
         item.id === product.id 
           ? { ...item, quantity: item.quantity + 1 } 
           : item
-      ));
+      );
     } else {
-      setCartItems([...cartItems, { ...product, quantity: 1 }]);
+      updatedCart = [...cartItems, { ...product, quantity: 1 }];
     }
+    
+    setCartItems(updatedCart);
+    localStorage.setItem('cart', JSON.stringify(updatedCart));
     toast.success('Товар добавлен в корзину');
   };
 
   const updateQuantity = (id: number, newQuantity: number) => {
+    let updatedCart;
     if (newQuantity < 1) {
-      setCartItems(cartItems.filter(item => item.id !== id));
+      updatedCart = cartItems.filter(item => item.id !== id);
     } else {
-      setCartItems(cartItems.map(item => 
+      updatedCart = cartItems.map(item => 
         item.id === id ? { ...item, quantity: newQuantity } : item
-      ));
+      );
     }
+    setCartItems(updatedCart);
+    localStorage.setItem('cart', JSON.stringify(updatedCart));
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleAuth = (e: React.FormEvent) => {
     e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    const email = formData.get('email') as string;
+    const name = formData.get('name') as string;
+    
     setIsAuthenticated(true);
-    toast.success('Вы успешно вошли в аккаунт');
+    localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('userEmail', email);
+    
+    if (name) {
+      localStorage.setItem('userName', name);
+    }
+    
+    toast.success(isRegister ? 'Регистрация прошла успешно!' : 'Вы успешно вошли в аккаунт');
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.setItem('isAuthenticated', 'false');
+    toast.success('Вы вышли из аккаунта');
   };
 
   const handleCheckout = () => {
@@ -98,8 +126,32 @@ const Index = () => {
       toast.error('Корзина пуста');
       return;
     }
+
+    const order = {
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString('ru-RU', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      items: cartItems.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: calculatePrice(item.price),
+        image: item.image
+      })),
+      total: totalPrice,
+      status: 'pending' as const
+    };
+
+    const existingOrders = JSON.parse(localStorage.getItem('orderHistory') || '[]');
+    localStorage.setItem('orderHistory', JSON.stringify([order, ...existingOrders]));
+
     toast.success('Заказ оформлен! Письмо с подтверждением отправлено на вашу почту');
     setCartItems([]);
+    localStorage.setItem('cart', JSON.stringify([]));
   };
 
   const totalPrice = cartItems.reduce((sum, item) => 
@@ -112,7 +164,9 @@ const Index = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold text-primary glow-text">лист.рф</h1>
+              <h1 className="text-3xl font-bold text-primary glow-text cursor-pointer" onClick={() => navigate('/')}>
+                лист.рф
+              </h1>
               {isFriday && (
                 <Badge className="bg-black text-yellow-400 border-yellow-400 animate-pulse">
                   ЧЁРНАЯ ПЯТНИЦА -35%
@@ -121,11 +175,21 @@ const Index = () => {
             </div>
             
             <nav className="hidden md:flex items-center gap-6">
-              <a href="#" className="text-foreground hover:text-primary transition-colors">Главная</a>
-              <a href="#catalog" className="text-foreground hover:text-primary transition-colors">Каталог</a>
-              <a href="#about" className="text-foreground hover:text-primary transition-colors">О магазине</a>
-              <a href="#history" className="text-foreground hover:text-primary transition-colors">История</a>
-              <a href="#profile" className="text-foreground hover:text-primary transition-colors">Профиль</a>
+              <button onClick={() => navigate('/')} className="text-foreground hover:text-primary transition-colors">
+                Главная
+              </button>
+              <a href="#catalog" className="text-foreground hover:text-primary transition-colors">
+                Каталог
+              </a>
+              <button onClick={() => navigate('/about')} className="text-foreground hover:text-primary transition-colors">
+                О магазине
+              </button>
+              <button onClick={() => navigate('/history')} className="text-foreground hover:text-primary transition-colors">
+                История
+              </button>
+              <button onClick={() => navigate('/profile')} className="text-foreground hover:text-primary transition-colors">
+                Профиль
+              </button>
             </nav>
 
             <div className="flex items-center gap-3">
@@ -136,30 +200,46 @@ const Index = () => {
               {!isAuthenticated ? (
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button className="glow-button">
+                    <Button className="glow-button" onClick={() => setIsRegister(false)}>
                       <Icon name="LogIn" size={18} />
                       Войти
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Вход в аккаунт</DialogTitle>
+                      <DialogTitle>{isRegister ? 'Регистрация' : 'Вход в аккаунт'}</DialogTitle>
                     </DialogHeader>
-                    <form onSubmit={handleLogin} className="space-y-4 mt-4">
+                    <form onSubmit={handleAuth} className="space-y-4 mt-4">
+                      {isRegister && (
+                        <div>
+                          <Label htmlFor="name">Имя</Label>
+                          <Input id="name" name="name" required />
+                        </div>
+                      )}
                       <div>
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" required />
+                        <Input id="email" name="email" type="email" required />
                       </div>
                       <div>
                         <Label htmlFor="password">Пароль</Label>
-                        <Input id="password" type="password" required />
+                        <Input id="password" name="password" type="password" required />
                       </div>
-                      <Button type="submit" className="w-full glow-button">Войти</Button>
+                      <Button type="submit" className="w-full glow-button">
+                        {isRegister ? 'Зарегистрироваться' : 'Войти'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="w-full"
+                        onClick={() => setIsRegister(!isRegister)}
+                      >
+                        {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
+                      </Button>
                     </form>
                   </DialogContent>
                 </Dialog>
               ) : (
-                <Button variant="outline" onClick={() => setIsAuthenticated(false)}>
+                <Button variant="outline" onClick={handleLogout}>
                   <Icon name="LogOut" size={18} />
                   Выйти
                 </Button>
@@ -176,59 +256,65 @@ const Index = () => {
                     )}
                   </Button>
                 </SheetTrigger>
-                <SheetContent>
+                <SheetContent className="flex flex-col">
                   <SheetHeader>
                     <SheetTitle>Корзина</SheetTitle>
                   </SheetHeader>
-                  <div className="mt-6 space-y-4">
-                    {cartItems.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-8">Корзина пуста</p>
-                    ) : (
-                      <>
-                        {cartItems.map(item => (
-                          <Card key={item.id} className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <span className="text-3xl">{item.image}</span>
-                                <div>
-                                  <p className="font-medium">{item.name}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {calculatePrice(item.price)} ₽
-                                  </p>
+                  
+                  {cartItems.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">Корзина пуста</p>
+                  ) : (
+                    <>
+                      <ScrollArea className="flex-1 -mx-6 px-6">
+                        <div className="space-y-4 pr-4">
+                          {cartItems.map(item => (
+                            <Card key={item.id} className="p-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-3 flex-1">
+                                  <span className="text-3xl">{item.image}</span>
+                                  <div className="flex-1">
+                                    <p className="font-medium text-sm">{item.name}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      {calculatePrice(item.price)} ₽
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Button 
+                                    size="icon" 
+                                    variant="outline"
+                                    className="h-8 w-8"
+                                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                  >
+                                    <Icon name="Minus" size={14} />
+                                  </Button>
+                                  <span className="w-8 text-center text-sm">{item.quantity}</span>
+                                  <Button 
+                                    size="icon" 
+                                    variant="outline"
+                                    className="h-8 w-8"
+                                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  >
+                                    <Icon name="Plus" size={14} />
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Button 
-                                  size="icon" 
-                                  variant="outline"
-                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                >
-                                  <Icon name="Minus" size={16} />
-                                </Button>
-                                <span className="w-8 text-center">{item.quantity}</span>
-                                <Button 
-                                  size="icon" 
-                                  variant="outline"
-                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                >
-                                  <Icon name="Plus" size={16} />
-                                </Button>
-                              </div>
-                            </div>
-                          </Card>
-                        ))}
-                        <div className="border-t pt-4">
-                          <div className="flex justify-between items-center mb-4">
-                            <span className="text-lg font-bold">Итого:</span>
-                            <span className="text-2xl font-bold text-primary">{totalPrice} ₽</span>
-                          </div>
-                          <Button className="w-full glow-button" onClick={handleCheckout}>
-                            Оформить заказ
-                          </Button>
+                            </Card>
+                          ))}
                         </div>
-                      </>
-                    )}
-                  </div>
+                      </ScrollArea>
+                      
+                      <div className="border-t pt-4 mt-4">
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="text-lg font-bold">Итого:</span>
+                          <span className="text-2xl font-bold text-primary">{totalPrice} ₽</span>
+                        </div>
+                        <Button className="w-full glow-button" onClick={handleCheckout}>
+                          Оформить заказ
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </SheetContent>
               </Sheet>
             </div>
@@ -246,17 +332,21 @@ const Index = () => {
           </p>
         </div>
 
-        <div id="catalog" className="mb-8 flex flex-wrap gap-2 justify-center">
-          {categories.map(cat => (
-            <Button
-              key={cat}
-              variant={selectedCategory === cat ? 'default' : 'outline'}
-              onClick={() => setSelectedCategory(cat)}
-              className={selectedCategory === cat ? 'glow-button' : ''}
-            >
-              {cat}
-            </Button>
-          ))}
+        <div id="catalog" className="mb-8">
+          <ScrollArea className="w-full whitespace-nowrap">
+            <div className="flex gap-2 pb-4">
+              {categories.map(cat => (
+                <Button
+                  key={cat}
+                  variant={selectedCategory === cat ? 'default' : 'outline'}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={selectedCategory === cat ? 'glow-button' : ''}
+                >
+                  {cat}
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -266,6 +356,9 @@ const Index = () => {
                 <div className="text-6xl mb-4 text-center">{product.image}</div>
                 <Badge className="mb-2">{product.category}</Badge>
                 <h3 className="text-lg font-semibold mb-2">{product.name}</h3>
+                {product.description && (
+                  <p className="text-sm text-muted-foreground mb-3">{product.description}</p>
+                )}
                 <div className="flex items-center gap-2 mb-4">
                   {isFriday && (
                     <span className="text-sm text-muted-foreground line-through">
@@ -286,17 +379,6 @@ const Index = () => {
               </div>
             </Card>
           ))}
-        </div>
-      </section>
-
-      <section id="about" className="bg-muted py-16">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4 glow-text">О магазине лист.рф</h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Мы предлагаем широкий ассортимент товаров для дома, мебель, продукты питания, 
-            сладости и всё необходимое для ваших питомцев. Каждую пятницу у нас Чёрная пятница 
-            со скидкой 35% на все товары!
-          </p>
         </div>
       </section>
 
