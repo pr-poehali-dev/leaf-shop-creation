@@ -43,9 +43,31 @@ const Profile = () => {
   }, []);
 
   const applyCustomTheme = (theme: CustomTheme) => {
-    document.documentElement.style.setProperty('--custom-bg', theme.backgroundColor);
-    document.documentElement.style.setProperty('--custom-text', theme.textColor);
-    document.documentElement.classList.toggle('glow-disabled', !theme.glowEnabled);
+    const root = document.documentElement;
+    
+    if (theme.backgroundColor) {
+      root.style.setProperty('--background', theme.backgroundColor);
+      root.style.backgroundColor = theme.backgroundColor;
+    }
+    
+    if (theme.textColor) {
+      root.style.setProperty('--foreground', theme.textColor);
+      root.style.setProperty('--primary', theme.textColor);
+      root.style.color = theme.textColor;
+    }
+    
+    const style = document.getElementById('custom-glow-style') || document.createElement('style');
+    style.id = 'custom-glow-style';
+    
+    if (!theme.glowEnabled) {
+      style.textContent = `.glow-text, .glow-button, .glow-card { text-shadow: none !important; box-shadow: none !important; }`;
+    } else {
+      style.textContent = '';
+    }
+    
+    if (!document.getElementById('custom-glow-style')) {
+      document.head.appendChild(style);
+    }
   };
 
   const handleNameChange = (e: React.FormEvent) => {

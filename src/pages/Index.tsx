@@ -11,6 +11,7 @@ import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { products, categories } from '@/data/products';
+import DeliveryNotification from '@/components/DeliveryNotification';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -20,6 +21,8 @@ const Index = () => {
   const [isFriday, setIsFriday] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Все');
   const [isRegister, setIsRegister] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [deliveryOrder, setDeliveryOrder] = useState<any>(null);
 
   useEffect(() => {
     const today = new Date().getDay();
@@ -50,9 +53,13 @@ const Index = () => {
     document.documentElement.classList.toggle('dark');
   };
 
-  const filteredProducts = selectedCategory === 'Все' 
-    ? products 
-    : products.filter(p => p.category === selectedCategory);
+  const filteredProducts = products
+    .filter(p => selectedCategory === 'Все' || p.category === selectedCategory)
+    .filter(p => 
+      searchQuery === '' || 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.category.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   const calculatePrice = (price: number) => {
     if (isFriday) {
@@ -149,7 +156,14 @@ const Index = () => {
     const existingOrders = JSON.parse(localStorage.getItem('orderHistory') || '[]');
     localStorage.setItem('orderHistory', JSON.stringify([order, ...existingOrders]));
 
-    toast.success('Заказ оформлен! Письмо с подтверждением отправлено на вашу почту');
+    setDeliveryOrder({
+      items: cartItems.map(item => ({
+        name: item.name,
+        image: item.image,
+        quantity: item.quantity
+      }))
+    });
+
     setCartItems([]);
     localStorage.setItem('cart', JSON.stringify([]));
   };
@@ -160,6 +174,12 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {deliveryOrder && (
+        <DeliveryNotification
+          orderItems={deliveryOrder.items}
+          onComplete={() => setDeliveryOrder(null)}
+        />
+      )}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -332,21 +352,35 @@ const Index = () => {
           </p>
         </div>
 
-        <div id="catalog" className="mb-8">
-          <ScrollArea className="w-full whitespace-nowrap">
-            <div className="flex gap-2 pb-4">
-              {categories.map(cat => (
-                <Button
-                  key={cat}
-                  variant={selectedCategory === cat ? 'default' : 'outline'}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={selectedCategory === cat ? 'glow-button' : ''}
-                >
-                  {cat}
-                </Button>
-              ))}
+        <div className="mb-8">
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Icon name="Search" size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Поиск товаров..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
             </div>
-          </ScrollArea>
+          </div>
+
+          <div id="catalog">
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex gap-2 pb-4">
+                {categories.map(cat => (
+                  <Button
+                    key={cat}
+                    variant={selectedCategory === cat ? 'default' : 'outline'}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={selectedCategory === cat ? 'glow-button' : ''}
+                  >
+                    {cat}
+                  </Button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
